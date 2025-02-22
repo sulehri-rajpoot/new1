@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to Video Converter (FFmpeg.js)</title>
+</head>
+<body>
+    <h2>Convert Image to Video Using FFmpeg.js</h2>
+    
+    <input type="file" id="imageInput" accept="image/jpeg, image/jpg, image/png, image/gif, image/bmp, image/webp, image/tiff">
+    <button id="convertBtn">Convert to Video</button>
+    
+    <video id="videoPreview" controls style="display:none; width: 300px;"></video>
+    
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.0/dist/ffmpeg.min.js"></script>
+    <script>
+        document.getElementById("convertBtn").addEventListener("click", async function() {
+            const { createFFmpeg, fetchFile } = FFmpeg;
+            const ffmpeg = createFFmpeg({
+                log: true,
+                corePath: "https://unpkg.com/@ffmpeg/core@0.12.0/dist/ffmpeg-core.wasm" // WebAssembly file
+            });
+
+            const imageInput = document.getElementById("imageInput").files[0];
+            if (!imageInput) {
+                alert("Please select an image.");
+                return;
+            }
+
+            try {
+                await ffmpeg.load(); // Wait for FFmpeg to initialize
+                const inputFileName = `input.${imageInput.name.split('.').pop()}`; // Keep original format
+                
+                ffmpeg.FS('writeFile', inputFileName, await fetchFile(imageInput));
+
+                await ffmpeg.run(
+                    '-framerate', '1',
+                    '-i', inputFileName,
+                    '-c:v', 'libx264',
+                    '-r', '30',
+                    '-pix_fmt', 'yuv420p',
+                    '-vf', 'scale=640:480',
+                    'output.mp4'
+                );
+
+                const data = ffmpeg.FS('readFile', 'output.mp4');
+                const videoUrl = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+
+                const videoPreview = document.getElementById("videoPreview");
+                videoPreview.src = videoUrl;
+                videoPreview.style.display = 'block';
+
+            } catch (error) {
+                console.error("Error:", error);
+                alert("An error occurred while converting the image.");
+            }
+        });
+    </script>
+</body>
+</html>
