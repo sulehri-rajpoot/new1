@@ -1,61 +1,202 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image to Video Converter (FFmpeg.js)</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Image to Video Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f9;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .container {
+      background: #fff;
+      padding: 2rem;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      max-width: 600px;
+      width: 100%;
+      text-align: center;
+    }
+
+    h1 {
+      margin-bottom: 1.5rem;
+      font-size: 2rem;
+      color: #007bff;
+    }
+
+    .drop-zone {
+      border: 2px dashed #007bff;
+      padding: 2rem;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .drop-zone:hover {
+      background: #e9f5ff;
+    }
+
+    .drop-zone span {
+      display: block;
+      margin: 0.5rem 0;
+      color: #666;
+    }
+
+    #browse-btn {
+      background: #007bff;
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    #browse-btn:hover {
+      background: #0056b3;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 10px;
+      background: #e0e0e0;
+      border-radius: 5px;
+      margin-top: 1.5rem;
+      overflow: hidden;
+    }
+
+    .progress {
+      width: 0%;
+      height: 100%;
+      background: #007bff;
+      transition: width 0.3s ease;
+    }
+
+    .preview-section {
+      margin-top: 1.5rem;
+    }
+
+    canvas, video {
+      max-width: 100%;
+      border-radius: 10px;
+      display: none;
+    }
+
+    .controls {
+      margin-top: 1.5rem;
+    }
+
+    .controls button {
+      background: #007bff;
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 0 0.5rem;
+      transition: background 0.3s ease;
+    }
+
+    .controls button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .controls button:hover:not(:disabled) {
+      background: #0056b3;
+    }
+  </style>
 </head>
 <body>
-    <h2>Convert Image to Video Using FFmpeg.js</h2>
-    
-    <input type="file" id="imageInput" accept="image/jpeg, image/jpg, image/png, image/gif, image/bmp, image/webp, image/tiff">
-    <button id="convertBtn">Convert to Video</button>
-    
-    <video id="videoPreview" controls style="display:none; width: 300px;"></video>
-    
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.0/dist/ffmpeg.min.js"></script>
-    <script>
-        document.getElementById("convertBtn").addEventListener("click", async function() {
-            const { createFFmpeg, fetchFile } = FFmpeg;
-            const ffmpeg = createFFmpeg({
-                log: true,
-                corePath: "https://unpkg.com/@ffmpeg/core@0.12.0/dist/ffmpeg-core.wasm" // WebAssembly file
-            });
+  <div class="container">
+    <h1>AI Image to Video Generator</h1>
+    <div class="upload-section">
+      <div class="drop-zone" id="drop-zone">
+        <span>Drag & Drop your image here</span>
+        <span>or</span>
+        <button id="browse-btn">Browse</button>
+        <input type="file" id="file-input" accept="image/jpeg, image/jpg, image/png, image/gif, image/webp">
+      </div>
+    </div>
+    <div class="progress-bar" id="progress-bar">
+      <div class="progress" id="progress"></div>
+    </div>
+    <div class="preview-section" id="preview-section">
+      <canvas id="preview-canvas"></canvas>
+      <video id="video-preview" controls style="display: none;"></video>
+    </div>
+    <div class="controls">
+      <button id="generate-btn" disabled>Generate Video</button>
+      <button id="download-btn" disabled>Download Video</button>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('file-input');
+      const browseBtn = document.getElementById('browse-btn');
+      const generateBtn = document.getElementById('generate-btn');
+      const downloadBtn = document.getElementById('download-btn');
+      const progressBar = document.getElementById('progress');
+      const previewCanvas = document.getElementById('preview-canvas');
+      const ctx = previewCanvas.getContext('2d');
 
-            const imageInput = document.getElementById("imageInput").files[0];
-            if (!imageInput) {
-                alert("Please select an image.");
-                return;
-            }
+      let uploadedImage = null;
 
-            try {
-                await ffmpeg.load(); // Wait for FFmpeg to initialize
-                const inputFileName = `input.${imageInput.name.split('.').pop()}`; // Keep original format
-                
-                ffmpeg.FS('writeFile', inputFileName, await fetchFile(imageInput));
+      dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+      });
 
-                await ffmpeg.run(
-                    '-framerate', '1',
-                    '-i', inputFileName,
-                    '-c:v', 'libx264',
-                    '-r', '30',
-                    '-pix_fmt', 'yuv420p',
-                    '-vf', 'scale=640:480',
-                    'output.mp4'
-                );
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        handleFile(e.dataTransfer.files[0]);
+      });
 
-                const data = ffmpeg.FS('readFile', 'output.mp4');
-                const videoUrl = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+      fileInput.addEventListener('change', (e) => {
+        handleFile(e.target.files[0]);
+      });
 
-                const videoPreview = document.getElementById("videoPreview");
-                videoPreview.src = videoUrl;
-                videoPreview.style.display = 'block';
+      browseBtn.addEventListener('click', () => fileInput.click());
 
-            } catch (error) {
-                console.error("Error:", error);
-                alert("An error occurred while converting the image.");
-            }
-        });
-    </script>
+      function handleFile(file) {
+        const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (file && validTypes.includes(file.type)) {
+          uploadedImage = file;
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.src = e.target.result;
+            img.onload = () => {
+              previewCanvas.width = img.width;
+              previewCanvas.height = img.height;
+              ctx.drawImage(img, 0, 0);
+              previewCanvas.style.display = 'block';
+              generateBtn.disabled = false;
+            };
+          };
+          reader.readAsDataURL(file);
+        } else {
+          alert('Please upload a valid image file.');
+        }
+      }
+
+      generateBtn.addEventListener('click', () => {
+        alert('Video generation is not supported in this environment.');
+      });
+
+      downloadBtn.addEventListener('click', () => {
+        alert('Download functionality is not implemented.');
+      });
+    });
+  </script>
 </body>
 </html>
